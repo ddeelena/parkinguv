@@ -1,0 +1,56 @@
+name: CI ParkingUV
+
+on:
+  push:
+    branches: ["**"]      # En cualquier rama
+  pull_request:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Instalar dependencias
+        run: uv sync
+
+      - name: Pruebas unitarias (TDD)
+        run: uv run pytest tests/ -v --ignore=tests/performance
+
+      - name: Pruebas BDD (Gherkin)
+        run: uv run pytest tests/features/ -v
+
+  performance:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'   # Solo en main
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync
+
+      - name: Iniciar servidor
+        run: uv run python src/app.py &
+        
+      - name: Esperar servidor
+        run: sleep 3
+
+      - name: Prueba de rendimiento Locust
+        run: |
+          uv run locust --headless -u 50 -r 10             --run-time 30s  
+--host http://localhost:8000             --csv=results
+          
+      - name: Verificar P95 menor a 300ms
+        run: |
+          python -c "
+          import csv
+          with open('results_stats.csv') as f:
+            rows = list(csv.DictReader(f))
+            for row in rows:
+              if row['Name'] == 'Aggregated':
+                p95 = float(row['95%'])
+                assert p95 < 300, f'P95={p95}ms supera 300ms'
+                print(f'P95: {p95}ms OK')
+          "
