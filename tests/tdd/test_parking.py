@@ -1,5 +1,6 @@
 import pytest
-from src.parking.parcking import calcular_cobro
+from src.parking.parking import calcular_cobro
+
 
 # --- Prueba 1: Menoas de 30 minutos ---
 def test_menos_30_minutos_es_gratis():
